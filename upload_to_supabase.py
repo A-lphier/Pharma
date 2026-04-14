@@ -16,7 +16,7 @@ import sys
 from tqdm import tqdm
 
 # ─── CONFIG ───
-SUPABASE_URL = "https://szeevxyldaxvmchsvpju.supabase.co"
+SUPABASE_URL = "https://vmammjkauepeeiylnueh.supabase.co"
 SUPABASE_SERVICE_KEY = "your-service-role-key-here"  # ← Replace with your service_role key
 DB_PATH = "./integratori_FINAL.db"
 BATCH_SIZE = 500
