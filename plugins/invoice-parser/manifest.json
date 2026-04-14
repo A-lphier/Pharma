@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "FatturaMVP Invoice Parser",
+  "version": "1.1",
+  "description": "Estrai dati da PDF/immagini fatture con OCR. Supporta drag & drop e integrazione email.",
+  "permissions": [
+    "activeTab", 
+    "scripting", 
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"]
+  }],
+  "web_accessible_resources": [{
+    "resources": ["lib/pdf.js", "lib/pdf.worker.js", "lib/tesseract.js"],
+    "matches": ["<all_urls>"]
+  }],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

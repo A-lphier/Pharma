@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fattura {{ invoice_number }}</title>
+  <style>
+    /* Reset e base */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      color: #1f2937;
+      background: #ffffff;
+    }
+
+    /* Colori brand */
+    :root {
+      --primary: #1e40af;
+      --primary-light: #dbeafe;
+      --accent: #3b82f6;
+      --text-dark: #1f2937;
+      --text-grey: #6b7280;
+      --border: #e5e7eb;
+      --bg-light: #f9fafb;
+    }
+
+    /* Layout A4 */
+    @page {
+      size: A4;
+      margin: 20mm;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      background: var(--primary-light);
+      border-radius: 8px;
+      padding: 12mm;
+      margin-bottom: 8mm;
+    }
+
+    .logo-area {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logo-placeholder {
+      width: 60mm;
+      height: 15mm;
+      background: var(--primary);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .invoice-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--primary);
+      margin-top: 3mm;
+    }
+
+    .invoice-meta {
+      text-align: right;
+    }
+
+    .invoice-meta-row {
+      margin-bottom: 2mm;
+    }
+
+    .invoice-meta-label {
+      font-size: 9px;
+      color: var(--text-grey);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .invoice-meta-value {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--text-dark);
+    }
+
+    /* Sezioni */
+    .section {
+      margin-bottom: 8mm;
+    }
+
+    .section-header {
+      background: var(--primary);
+      color: white;
+      font-size: 9px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3mm 5mm;
+      border-radius: 4px 4px 0 0;
+    }
+
+    .section-header.accent {
+      background: var(--accent);
+    }
+
+    .section-content {
+      background: var(--bg-light);
+      padding: 5mm;
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+    }
+
+    /* Info fattura row */
+    .info-row {
+      display: flex;
+      gap: 10mm;
+      margin-bottom: 5mm;
+    }
+
+    .info-block {
+      flex: 1;
+    }
+
+    /* Partner details */
+    .partner-name {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--text-dark);
+      margin-bottom: 2mm;
+    }
+
+    .partner-detail {
+      font-size: 10px;
+      color: var(--text-grey);
+      margin-bottom: 1mm;
+    }
+
+    /* Tabella articoli */
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+
+    .items-table th {
+      background: var(--accent);
+      color: white;
+      font-weight: bold;
+      text-align: left;
+      padding: 3mm;
+      font-size: 9px;
+      text-transform: uppercase;
+    }
+
+    .items-table th:nth-child(n+2) {
+      text-align: right;
+    }
+
+    .items-table td {
+      padding: 3mm;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .items-table td:nth-child(n+2) {
+      text-align: right;
+      font-family: 'Courier New', monospace;
+    }
+
+    .items-table tr:nth-child(even) {
+      background: var(--bg-light);
+    }
+
+    /* Totals */
+    .totals {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      margin-top: 5mm;
+    }
+
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      width: 60mm;
+      padding: 2mm 3mm;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .totals-row.total {
+      background: var(--primary-light);
+      border-bottom: none;
+      border-top: 2px solid var(--primary);
+    }
+
+    .totals-label {
+      font-size: 11px;
+      color: var(--text-dark);
+    }
+
+    .totals-label.bold {
+      font-weight: bold;
+    }
+
+    .totals-value {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: var(--text-dark);
+    }
+
+    .totals-value.total {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--primary);
+    }
+
+    /* Dati pagamento */
+    .payment-table {
+      width: 100%;
+    }
+
+    .payment-row {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 2mm 5mm;
+    }
+
+    .payment-label {
+      width: 50mm;
+      font-size: 9px;
+      color: var(--text-grey);
+      text-transform: uppercase;
+    }
+
+    .payment-value {
+      flex: 1;
+      font-size: 11px;
+      font-weight: bold;
+      color: var(--text-dark);
+    }
+
+    .payment-value.iban {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 10mm;
+      padding-top: 3mm;
+      border-top: 0.5px solid var(--border);
+      text-align: center;
+    }
+
+    .footer-text {
+      font-size: 7px;
+      color: var(--text-grey);
+      line-height: 1.6;
+    }
+
+    /* Status badge */
+    .status {
+      display: inline-block;
+      padding: 1mm 3mm;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status.paid { background: #dcfce7; color: #166534; }
+    .status.pending { background: #fef9c3; color: #854d0e; }
+    .status.overdue { background: #fee2e2; color: #991b1b; }
+
+    /* Stampa */
+    @media print {
+      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .header, .section-header, .items-table th, .totals-row.total { print-color-adjust: exact; }
+    }
+
+    @media screen {
+      body { max-width: 210mm; margin: 0 auto; padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ================================================ -->
+  <!-- HEADER: Logo + Numero fattura -->
+  <!-- ================================================ -->
+  <div class="header">
+    <div class="logo-area">
+      <!-- Logo placeholder — sostituire con logo reale -->
+      <div class="logo-placeholder">
+        FATTURA
+      </div>
+      <div class="invoice-title">Fattura</div>
+    </div>
+    <div class="invoice-meta">
+      <div class="invoice-meta-row">
+        <div class="invoice-meta-label">Numero</div>
+        <div class="invoice-meta-value">{{ invoice_number }}</div>
+      </div>
+      <div class="invoice-meta-row">
+        <div class="invoice-meta-label">Data fattura</div>
+        <div class="invoice-meta-value">{{ invoice_date }}</div>
+      </div>
+      <div class="invoice-meta-row">
+        <div class="invoice-meta-label">Scadenza</div>
+        <div class="invoice-meta-value">{{ due_date }}</div>
+      </div>
+      <div class="invoice-meta-row">
+        <span class="status {{ status }}">{{ status_label }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================ -->
+  <!-- INFO: Dati fattura + Cedente/Prestatore -->
+  <!-- ================================================ -->
+  <div class="section">
+    <table style="width: 100%; margin-bottom: 5mm;">
+      <tr>
+        <td style="width: 50%; vertical-align: top;">
+          <div class="section-header">Cedente / Prestatore</div>
+          <div class="section-content">
+            <div class="partner-name">{{ supplier_name }}</div>
+            {% if supplier_vat %}<div class="partner-detail">P.IVA: {{ supplier_vat }}</div>{% endif %}
+            {% if supplier_cf %}<div class="partner-detail">CF: {{ supplier_cf }}</div>{% endif %}
+            {% if supplier_address %}<div class="partner-detail">{{ supplier_address }}</div>{% endif %}
+            {% if supplier_phone %}<div class="partner-detail">Tel: {{ supplier_phone }}</div>{% endif %}
+            {% if supplier_email %}<div class="partner-detail">Email: {{ supplier_email }}</div>{% endif %}
+            {% if supplier_pec %}<div class="partner-detail">PEC: {{ supplier_pec }}</div>{% endif %}
+            {% if supplier_sdi %}<div class="partner-detail">SDI: {{ supplier_sdi }}</div>{% endif %}
+          </div>
+        </td>
+        <td style="width: 8mm;"></td>
+        <td style="width: 50%; vertical-align: top;">
+          <div style="margin-bottom: 5mm;">
+            <div class="invoice-meta-label">Metodo di pagamento</div>
+            <div class="invoice-meta-value">{{ payment_method }}</div>
+          </div>
+          <div>
+            <div class="invoice-meta-label">Giorni pagamento</div>
+            <div class="invoice-meta-value">{{ payment_days }} giorni</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ================================================ -->
+  <!-- CESSIONARIO / COMMITTENTE -->
+  <!-- ================================================ -->
+  <div class="section">
+    <div class="section-header accent">Cessionario / Committente</div>
+    <div class="section-content">
+      <div class="partner-name">{{ customer_name }}</div>
+      {% if customer_vat %}<div class="partner-detail">P.IVA: {{ customer_vat }}</div>{% endif %}
+      {% if customer_cf %}<div class="partner-detail">CF: {{ customer_cf }}</div>{% endif %}
+      {% if customer_address %}<div class="partner-detail">{{ customer_address }}</div>{% endif %}
+      {% if customer_phone %}<div class="partner-detail">Tel: {{ customer_phone }}</div>{% endif %}
+      {% if customer_email %}<div class="partner-detail">Email: {{ customer_email }}</div>{% endif %}
+      {% if customer_pec %}<div class="partner-detail">PEC: {{ customer_pec }}</div>{% endif %}
+      {% if customer_sdi %}<div class="partner-detail">SDI: {{ customer_sdi }}</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- ================================================ -->
+  <!-- BENI / SERVIZI -->
+  <!-- ================================================ -->
+  <div class="section">
+    <div class="section-header">Beni / Servizi</div>
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>Descrizione</th>
+          <th>Quantità</th>
+          <th>Prezzo unitario</th>
+          <th>Aliquota IVA</th>
+          <th>Importo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.description }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>€ {{ item.unit_price }}</td>
+          <td>{{ item.vat_rate }}%</td>
+          <td>€ {{ item.amount }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td>{{ description or 'Fornitura servizi / beni' }}</td>
+          <td>1</td>
+          <td>€ {{ amount }}</td>
+          <td>22%</td>
+          <td>€ {{ amount }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================================================ -->
+  <!-- TOTALI -->
+  <!-- ================================================ -->
+  <div class="totals">
+    <div class="totals-row">
+      <span class="totals-label">Imponibile:</span>
+      <span class="totals-value">€ {{ amount }}</span>
+    </div>
+    <div class="totals-row">
+      <span class="totals-label">IVA (22%):</span>
+      <span class="totals-value">€ {{ vat_amount }}</span>
+    </div>
+    <div class="totals-row total">
+      <span class="totals-label bold">Totale fattura:</span>
+      <span class="totals-value total">€ {{ total_amount }}</span>
+    </div>
+  </div>
+
+  <!-- ================================================ -->
+  <!-- DATI PAGAMENTO -->
+  <!-- ================================================ -->
+  {% if supplier_iban %}
+  <div class="section" style="margin-top: 8mm;">
+    <div class="section-header">Dati Pagamento</div>
+    <div class="section-content" style="padding: 0;">
+      <div class="payment-row">
+        <span class="payment-label">Metodo</span>
+        <span class="payment-value">{{ payment_method }}</span>
+      </div>
+      <div class="payment-row">
+        <span class="payment-label">IBAN</span>
+        <span class="payment-value iban">{{ supplier_iban }}</span>
+      </div>
+      <div class="payment-row" style="border-bottom: none;">
+        <span class="payment-label">Banca</span>
+        <span class="payment-value">Bonifico bancario</span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ================================================ -->
+  <!-- FOOTER -->
+  <!-- ================================================ -->
+  <div class="footer">
+    <p class="footer-text">
+      Fattura emessa da FatturaMVP — Il presente documento è stato generato elettronicamente.<br>
+      Ai sensi dell'art. 21 del D.P.R. 633/1972, la fattura elettronica è considerata originale.<br>
+      La fattura è archiviata nel sistema FatturaMVP.
+    </p>
+  </div>
+
+</body>
+</html>

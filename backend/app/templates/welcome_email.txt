@@ -1,0 +1,54 @@
+========================================
+WELCOME EMAIL - Benvenuto in FatturaMVP
+========================================
+Lingua: IT
+========================================
+
+OGGETTO: Benvenuto in FatturaMVP — I tuoi incassi in buone mani
+
+
+Ciao {{ nome }},
+
+benvenuto in FatturaMVP! Siamo felici di averti a bordo.
+
+Ecco i prossimi passi per iniziare:
+
+1. Completa il profilo aziendale
+   Accedi a Impostazioni > Profilo e inserisci i tuoi dati fiscali.
+
+2. Collega i tuoi clienti
+   Vai su Clienti > Aggiungi e inserisci i tuoi clienti. Piu clienti aggiungi,
+   piu preciso sara lo scadenziario.
+
+3. Importa le fatture esistenti
+   Se hai fatture in scadenza, importale da CSV o caricale manualmente.
+   Il sistema iniziera subito a monitorarle.
+
+4. Configura il sollecito automatico
+   In Impostazioni > Sollecito puoi scegliere il tono (gentile, equilibrato,
+   fermo) e attivare l'invio automatico.
+
+---
+
+INTEGRAZIONE SDI
+Se emetti fattura elettronica, collega il tui clienti SDI in Impostazioni > SDI.
+Le fatture arriveranno automaticamente nel tuo scadenziario.
+
+---
+
+I TUOI PRIMI 30 GIORNI SONO GRATIS
+Nessun addebito fino al {{ data_scadenza_prova }}.
+Puoi cancellare in qualsiasi momento da Impostazioni > Billing.
+
+---
+
+Serve aiuto? Rispondici a questa email oppure scrivi a supporti@fatturamvp.it.
+Rispondiamo entro 24 ore lavorative.
+
+In bocca al lupo,
+Il team di FatturaMVP
+
+--
+FatturaMVP
+contatti@fatturamvp.it
+https://fatturamvp.it

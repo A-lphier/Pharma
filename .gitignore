@@ -1,0 +1,45 @@
+# Database files (large)
+*.db
+*.db.gz
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+env/
+venv/
+
+# Node
+node_modules/
+dist/
+.npm/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+backend/__pycache__/
+frontend/dist/
+frontend/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+._*
+.DS_Storeintegratori_FINAL.db

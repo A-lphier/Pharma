@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 380px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8fafc;
+    }
+    .header {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: white;
+      padding: 16px;
+      text-align: center;
+    }
+    .header h1 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .header p { font-size: 11px; opacity: 0.9; }
+    .content { padding: 16px; }
+    
+    .drop-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+    .drop-zone-icon { font-size: 32px; margin-bottom: 8px; }
+    .drop-zone-text { font-size: 13px; color: #64748b; }
+    .drop-zone-subtext { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+    
+    .mode-toggle {
+      display: flex;
+      background: #e2e8f0;
+      border-radius: 8px;
+      padding: 4px;
+      margin-bottom: 12px;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 8px;
+      text-align: center;
+      font-size: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #64748b;
+    }
+    .mode-btn.active {
+      background: white;
+      color: #2563eb;
+      font-weight: 500;
+    }
+    
+    .engine-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .engine-btn {
+      flex: 1;
+      padding: 8px;
+      text-align: center;
+      font-size: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid #e2e8f0;
+      background: white;
+      color: #64748b;
+    }
+    .engine-btn.active {
+      border-color: #2563eb;
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 12px;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-secondary {
+      background: white;
+      color: #374151;
+      border: 1px solid #e5e7eb;
+    }
+    .btn-secondary:hover { background: #f9fafb; }
+    .btn-ai {
+      background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+      color: white;
+    }
+    
+    .status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .status.success { background: #d1fae5; color: #065f46; }
+    .status.error { background: #fee2e2; color: #991b1b; }
+    .status.loading { background: #dbeafe; color: #1e40af; }
+    
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+      display: none;
+    }
+    .progress-bar.visible { display: block; }
+    .progress-fill {
+      height: 100%;
+      background: #8b5cf6;
+      transition: width 0.3s;
+    }
+    
+    .data-preview {
+      margin-top: 16px;
+      padding: 16px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 13px;
+      display: none;
+    }
+    .data-preview.visible { display: block; }
+    .data-preview h3 { 
+      font-size: 12px; 
+      color: #6b7280; 
+      margin-bottom: 12px;
+    }
+    .data-row { 
+      display: flex; 
+      justify-content: space-between; 
+      padding: 8px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .data-row:last-child { border-bottom: none; }
+    .data-label { color: #64748b; font-size: 12px; }
+    .data-value { font-weight: 500; color: #1e293b; font-size: 12px; }
+    .data-value.editable {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      min-width: 140px;
+    }
+    
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .actions .btn { margin-top: 0; }
+    
+    .api-config {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+    .api-config label { 
+      font-size: 11px; 
+      color: #64748b; 
+      display: block; 
+      margin-bottom: 4px; 
+    }
+    .api-config input, .api-config select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    
+    .tabs {
+      display: flex;
+      background: #e2e8f0;
+      border-radius: 8px;
+      padding: 4px;
+      margin-bottom: 16px;
+    }
+    .tab {
+      flex: 1;
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #64748b;
+    }
+    .tab.active {
+      background: white;
+      color: #2563eb;
+      font-weight: 500;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    .history-item {
+      padding: 12px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .history-item:hover { border-color: #2563eb; }
+    .history-item-number { font-weight: 500; font-size: 13px; }
+    .history-item-date { font-size: 11px; color: #94a3b8; }
+    .history-item-amount { font-weight: 500; color: #10b981; float: right; }
+    
+    .engine-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      margin-left: 8px;
+    }
+    .engine-badge.ai { background: #ede9fe; color: #7c3aed; }
+    .engine-badge.ocr { background: #fef3c7; color: #92400e; }
+    
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .checkbox-row input { width: auto; }
+    
+    .hint {
+      font-size: 10px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📄 FatturaMVP Parser</h1>
+    <p>Estrai dati da PDF/immagini fatture</p>
+  </div>
+  
+  <div class="content">
+    <div class="tabs">
+      <div class="tab active" data-tab="extract">Estrai</div>
+      <div class="tab" data-tab="history">Storico</div>
+      <div class="tab" data-tab="settings">⚙️</div>
+    </div>
+    
+    <!-- Tab: Extract -->
+    <div class="tab-content active" id="tab-extract">
+      <div class="engine-toggle">
+        <div class="engine-btn active" data-engine="ai">🤖 AI</div>
+        <div class="engine-btn" data-engine="pdf">📄 PDF</div>
+        <div class="engine-btn" data-engine="ocr">🔤 OCR</div>
+      </div>
+      
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-icon" id="dropIcon">🤖</div>
+        <div class="drop-zone-text" id="dropText">Trascina file PDF o immagine</div>
+        <div class="drop-zone-subtext" id="dropSub">Estrazione AI avanzata</div>
+        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+      </div>
+      
+      <button id="pageScanBtn" class="btn btn-secondary">
+        🔍 Analizza questa pagina
+      </button>
+      
+      <div id="status" class="status"></div>
+      <div id="progressBar" class="progress-bar">
+        <div id="progressFill" class="progress-fill" style="width:0%"></div>
+      </div>
+      
+      <div id="dataPreview" class="data-preview">
+        <h3>✅ Dati estratti <span id="engineBadge" class="engine-badge ai">AI</span></h3>
+        <div id="dataContent"></div>
+        
+        <div class="actions">
+          <button id="saveBtn" class="btn btn-primary">💾 Salva</button>
+          <button id="clearBtn" class="btn btn-secondary">Cancella</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Tab: History -->
+    <div class="tab-content" id="tab-history">
+      <div id="historyList">
+        <p style="text-align:center;color:#94a3b8;font-size:12px;padding:20px;">
+          Nessuna fattura salvata
+        </p>
+      </div>
+    </div>
+    
+    <!-- Tab: Settings -->
+    <div class="tab-content" id="tab-settings">
+      <div class="api-config">
+        <label>Motore AI</label>
+        <select id="aiEngine">
+          <option value="gemini">Google Gemini</option>
+          <option value="openai">OpenAI GPT-4o</option>
+          <option value="anthropic">Anthropic Claude</option>
+          <option value="custom">API Custom</option>
+        </select>
+      </div>
+      <div class="api-config" style="margin-top:12px;">
+        <label>API Key</label>
+        <input type="password" id="aiApiKey" placeholder="Inserisci la tua API key">
+      </div>
+      <p class="hint">Gratuito: Gemini 2.0 Flash (googleai.google.cn)</p>
+      
+      <div class="api-config" style="margin-top:12px;">
+        <label>API Endpoint</label>
+        <input type="text" id="apiEndpoint" placeholder="http://localhost:8000">
+      </div>
+      <div class="api-config" style="margin-top:12px;">
+        <label>Backend API Key</label>
+        <input type="password" id="apiKey" placeholder="...">
+      </div>
+      <button id="saveSettingsBtn" class="btn btn-primary" style="margin-top:16px;">
+        Salva impostazioni
+      </button>
+    </div>
+  </div>
+  
+  <script src="lib/pdf.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

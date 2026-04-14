@@ -1,0 +1,194 @@
+# docker-compose.yml - FatturaMVP
+# PostgreSQL 16 + Redis 7 + Celery + Backend + Frontend + Nginx
+
+version: '3.8'
+
+services:
+  # ──────────────────────────────────────────────
+  # PostgreSQL 16 - Database principale
+  # ──────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: fattura_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fattura}
+      POSTGRES_USER: ${POSTGRES_USER:-fattura}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fattura} -d ${POSTGRES_DB:-fattura}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - fattura_network
+
+  # ──────────────────────────────────────────────
+  # Redis 7 - Cache e message broker per Celery
+  # ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fattura_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - fattura_network
+
+  # ──────────────────────────────────────────────
+  # Backend - FastAPI + Uvicorn
+  # ──────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fattura_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: "${DEBUG:-false}"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - fattura_network
+
+  # ──────────────────────────────────────────────
+  # Celery Worker - Task asincroni
+  # ──────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fattura_celery_worker
+    restart: unless-stopped
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fattura_network
+
+  # ──────────────────────────────────────────────
+  # Celery Beat - Scheduler task periodici
+  # ──────────────────────────────────────────────
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fattura_celery_beat
+    restart: unless-stopped
+    command: celery -A app.celery_app beat --loglevel=info --scheduler celery.schedulers.DatabaseScheduler
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - celerybeat_data:/app/celerybeat-schedule
+    networks:
+      - fattura_network
+
+  # ──────────────────────────────────────────────
+  # Frontend - React + Vite + Nginx
+  # ──────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fattura_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - fattura_network
+
+  # ──────────────────────────────────────────────
+  # Nginx - Reverse proxy (opzionale)
+  # ──────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: fattura_nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - fattura_network
+
+# ──────────────────────────────────────────────
+# Volumi persistenti
+# ──────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  celerybeat_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+# ──────────────────────────────────────────────
+# Rete interna
+# ──────────────────────────────────────────────
+networks:
+  fattura_network:
+    driver: bridge
