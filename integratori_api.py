@@ -6,8 +6,33 @@ import requests
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import re
 
 SUPABASE_URL = "https://vmammjkauepeeiylnueh.supabase.co"
+
+# Known Italian supplements — LLM uses this to map brand names → ingredients
+PRODUCT_KNOWLEDGE = """
+PRODOTTI NOTI E COMPOSIZIONE:
+- Polase: potassio 200mg + magnesio 75mg (K+Mg minerale)
+- Polase Beta: potassio 300mg + magnesio 75mg (Polase potenziato)
+- BeTotal: vitamine B1,B2,B3,B5,B6,B7,B9,B12 + C + ferro + zinco (multi-B completo)
+- Supradyn: vitamine A+B+C+D+E + minerali Zn,Mg,Fe,Cu,Mn,Se (multi-vit full)
+- Biochetasi: tiamina+riboflavina+piridossina+acido tiottico (B-compounds)
+- Enterogermina/Falqui: Bacillus clausii spore probiotiche
+- Lisomucil/Fluimucil: N-acetilcisteina (NAC) 600mg (mucolitico)
+- Ymea: soia isoflavoni 100mg (menopausa)
+- Gaviscon: alginato + sodio bicarbonate (reflusso)
+- Omeprazen/Losec: omeprazolo 20mg (inibitore pompa protoni)
+
+COMPOSIZIONE RICERCABILE:
+- Vitamine B: b1,b2,b6,b12,niacina,folico,pantotenico,biotina (b7)
+- Minerali: potassio(K),magnesio(Mg),calzio(Ca),ferro(Fe),zinco(Zn),selenio(Se),rame(Cu)
+- Aminoacidi: taurina,carnitina,glutammina,lisina,metionina,cisteina,leucina,bcaa,arginina,citrullina,ornitina,5-htp,triptofano,GABA
+- Altro: creatina,caffeina,ginseng,rodiola,ashwagandha,griffonia,zafferano,curcuma,zenzero,coenzima q10,omega3,dha,epa,melatonina,probiotici,enzimi
+- Erbe: echinacea,passiflora,valeriana,ginkgo,bacopa,tè verde
+
+CATEGORIE: categoria A = integratori con MINSAN verificato; categorie B/C/D = integratori senza MINSAN.
+"""
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtYW1tamthdWVwZWVpeWxudWVoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjA3MDQ4NSwiZXhwIjoyMDkxNjQ2NDg1fQ.TDveBcTklfNhSjDfsBEyplrb8FcydznMLs60hIs9qaY"
 
 app = Flask(__name__)
@@ -169,8 +194,8 @@ REGOLE CRITICHE:
         mr = requests.post(
             'https://api.minimax.io/anthropic/v1/messages',
             headers={'Authorization': f'Bearer {MINIMAX_KEY}', 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01'},
-            json={'model': 'MiniMax-M2.7', 'max_tokens': 300, 'messages': [{'role': 'user', 'content': prompt}]},
-            timeout=15
+            json={'model': 'MiniMax-M2.7', 'max_tokens': 600, 'messages': [{'role': 'user', 'content': prompt}]},
+            timeout=30
         )
         if mr.status_code != 200:
             return jsonify({'error': f'MiniMax error {mr.status_code}', 'detail': mr.text[:200]}), 502
@@ -198,9 +223,12 @@ REGOLE CRITICHE:
             text = str(content)
 
         import re
-        json_match = re.search(r'\{\s*\"primary\".*\}', text, re.DOTALL)
+        # Strip markdown code fences
+        text = re.sub(r'^```json\s*', '', text.strip())
+        text = re.sub(r'\s*```$', '', text)
+        json_match = re.search(r'\{"primary".*\}', text, re.DOTALL)
         if not json_match:
-            return jsonify({'error': 'Parsing risposta LLM fallito', 'raw': text[:200]}), 500
+            return jsonify({'error': 'Parsing risposta LLM fallito', 'raw': text[:300]}), 500
 
         parsed = json.loads(json_match.group())
         primary = parsed.get('primary', '')
@@ -242,6 +270,186 @@ REGOLE CRITICHE:
             'count': len(results)
         })
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/search/combo', methods=['POST'])
+def search_combo():
+    """Natural language → LLM intelligent filter → structured DB params → results.
+    
+    Receives: { "q": "cerca un integratore come polase beta con aminoacidi" }
+    Uses PRODUCT_KNOWLEDGE to map brand names to ingredients.
+    Returns: { results, intent: { primary, secondary, min_<nutrient>, category, why } }
+    """
+    body = request.get_json(force=True)
+    query = (body.get('q') or '').strip()
+    if not query:
+        return jsonify({'error': 'query mancante'}), 400
+
+    MINIMAX_KEY = 'sk-cp-fEvjtEHLo5X-8KKNtLQvZfCvs_N-fL7yxLZbTNMXyX4O1Ha94esFXopqVEiFLZAzUEiVY4nIInp8Gk7hRzR1zqAONwy6lNRyvFp9AZvv4P_Zk5AWPf-_5zc'
+
+    prompt = f"""Sei un INTELLIGENT FILTER per integratori alimentari italiani.
+L'utente cerca: "{query}"
+
+{PRODUCT_KNOWLEDGE}
+
+ISTRUZIONI:
+1. Interpreta la richiesta dell'utente
+2. Se menziona un prodotto noto (Polase, BeTotal, Supradyn, ecc.), estrai i suoi ingredienti dalla knowledge base
+3. Estrai i PARAMETRI DI RICERCA STRUTTURATI per il database
+4. Se l'utente dice "come X" oppure "alternativa a X" oppure "migliora su X", significa che vuole prodotti che abbiano almeno gli stessi nutrienti di X
+
+Rispondi SOLO con JSON valido (nessun markdown, nessun commento):
+{{
+  "intent": {{
+    "primary": "ingrediente/principio attivo principale cercato",
+    "secondary": ["lista ingredienti secondari richiesti"],
+    "category": "A se integratore con minsan, B se integratore alimentare, null se qualsiasi",
+    "min_dosage": "dosaggio minimo richiesto per l'ingrediente principale (es. '200mg potassio' o '50mg magnesio')",
+    "profile": "profilo nutrizionale che l'utente sta cercando in una frase",
+    "why": "perché questi ingredienti (breve, 1 riga)"
+  }},
+  "search_params": {{
+    "ingredients": ["lista ingredienti da cercare nel campo 'ingredienti' del DB"],
+    "exclude": ["ingredienti da ESCLUDERE (es. zuccheri, addensanti)"],
+    "category_match": "criterio di categoria"
+  }}
+}}
+
+REGOLE:
+- "come Polase beta": estrai potassio + magnesio come ingredienti principali con min_dosage "200mg potassio, 50mg magnesio"
+- "come BeTotal": estrai vitamine B (b1,b2,b6,b12,niacina,folico,pantotenico) + ferro + zinco
+- "come Supradyn": estrai multivitaminico (vitamine + minerali multipli)
+- "con aminoacidi": estrai lista amminoacidi (taurina, carnitina, glutammina, leucina, bcaa, arginina)
+- "per sonno": estrai melatonina + valeriana + passiflora + magnesium
+- "per sport": estrai aminoacidi (bcaa, leucina) + creatina + caffeina + potassio + magnesio
+- "per stress": estrai magnesio + vitamin b6 + rodiola + ashwagandha + griffonia
+- "per memoria": estrai omega3 + dha + fosfatidilserina + ginkgo + bacopa
+- "per capelli": estrai biotina + zinco + selenio + aminoacidi (cisteina, metionina)
+- "per ossa": estrai calcio + vitamina d + vitamina k + magnesio
+- "per immunita": estrai vitamina c + zinco + echinacea + lattoferrina
+- "per digestione": estrai probiotici + enzimi + fibre + glutammina
+
+Rispondi solo JSON."""
+
+    try:
+        mr = requests.post(
+            'https://api.minimax.io/anthropic/v1/messages',
+            headers={'Authorization': f'Bearer {MINIMAX_KEY}', 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01'},
+            json={'model': 'MiniMax-M2.7', 'max_tokens': 1000, 'messages': [{'role': 'user', 'content': prompt}]},
+            timeout=45
+        )
+        if mr.status_code != 200:
+            return jsonify({'error': f'MiniMax error {mr.status_code}', 'detail': mr.text[:200]}), 502
+
+        mr_data = mr.json()
+        content = mr_data.get('content', [])
+        text = ''
+        if isinstance(content, list):
+            for block in content:
+                if block.get('type') == 'text':
+                    text = block.get('text', '')
+                    break
+        if not text:
+            text = str(content)
+
+        # Strip markdown code fences
+        text = re.sub(r'^```json\s*', '', text.strip())
+        text = re.sub(r'\s*```$', '', text)
+
+        # Try multiple JSON patterns - LLM sometimes returns flat, sometimes nested
+        for pattern in [
+            r'\{"intent":\s*\{.*\}\s*,\s*"search_params":\s*\{.*\}\s*\}',
+            r'\{"primary".*\}',
+            r'\{.*"primary".*\}',
+        ]:
+            json_match = re.search(pattern, text, re.DOTALL)
+            if json_match:
+                break
+
+        if not json_match:
+            return jsonify({'error': 'Parsing LLM fallito', 'raw': text[:300]}), 500
+
+        try:
+            parsed = json.loads(json_match.group())
+        except json.JSONDecodeError:
+            # Try to fix common issues
+            fixed = re.sub(r',\s*\]', ']', json_match.group())
+            fixed = re.sub(r',\s*\}', '}', fixed)
+            parsed = json.loads(fixed)
+
+        # Normalize: support both flat {primary, secondary} and nested {intent: {primary, secondary}}
+        if 'intent' in parsed:
+            intent = parsed.get('intent', {})
+            search_params = parsed.get('search_params', {})
+        else:
+            intent = parsed  # flat structure
+            search_params = parsed.get('search_params', {})
+        
+        primary = intent.get('primary', '')
+        secondary = intent.get('secondary', [])
+        ingredients = search_params.get('ingredients', [primary])
+        exclude = search_params.get('exclude', [])
+        category = intent.get('category')
+        
+        cols = 'id,nome,azienda,categoria,modo_duso,ingredienti,dosaggio,fonte,minsan'
+        
+        # Build OR query across all ingredients
+        ingredient_queries = []
+        for ing in ingredients:
+            if ing:
+                ingredient_queries.append(f'ingredienti.ilike.%25{ing}%25')
+        
+        if not ingredient_queries:
+            return jsonify({'error': 'Nessun ingrediente estratto', 'intent': intent}), 400
+        
+        ingredient_or = 'or'.join(ingredient_queries)
+        params = f'select={cols}&{ingredient_or}&limit=40'
+        # Note: category letters (A/B/C/D) don't match DB values - skip raw filter
+        
+        sr = requests.get(f'{SUPABASE_URL}/rest/v1/products?{params}', headers=HEADERS, timeout=10)
+        results = sr.json() if sr.status_code == 200 else []
+        
+        # Filter: secondary keywords - at least ONE must be present (OR logic, not AND)
+        if secondary:
+            def matches_any(row):
+                text = ' '.join([
+                    (row.get('nome') or ''),
+                    (row.get('ingredienti') or ''),
+                    (row.get('dosaggio') or '')
+                ]).lower()
+                return any(kw.lower() in text for kw in secondary)
+            results = [r for r in results if matches_any(r)]
+        
+        # Exclude unwanted ingredients
+        if exclude:
+            def no_excluded(row):
+                text = ' '.join([
+                    (row.get('ingredienti') or ''),
+                    (row.get('nome') or '')
+                ]).lower()
+                return not any(ex.lower() in text for ex in exclude)
+            results = [r for r in results if no_excluded(r)]
+        
+        # Deduplicate by MINSAN (keep first seen)
+        seen = set()
+        deduped = []
+        for r in results:
+            key = r.get('minsan') or r.get('nome', '')
+            if key not in seen:
+                seen.add(key)
+                deduped.append(r)
+        
+        return jsonify({
+            'results': [{k: clean_value(v) for k, v in row.items()} for row in deduped[:15]],
+            'intent': intent,
+            'search_params': search_params,
+            'count': len(deduped),
+            'query_used': query
+        })
+
+    except json.JSONDecodeError as e:
+        return jsonify({'error': f'JSON decode error: {e}'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
