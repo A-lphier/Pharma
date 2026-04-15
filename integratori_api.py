@@ -1,42 +1,50 @@
 #!/usr/bin/env python3
 """
-IntegrAction Flask API Server - serves integratori_FINAL.db on port 8765
+IntegrAction API Server - reads from Supabase (vmammjkauepeeiylnueh)
 """
-import sqlite3
+import requests
 import json
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'integratori_FINAL.db')
+SUPABASE_URL = "https://vmammjkauepeeiylnueh.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtYW1tamthdWVwZWVpeWxudWVoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjA3MDQ4NSwiZXhwIjoyMDkxNjQ2NDg1fQ.TDveBcTklfNhSjDfsBEyplrb8FcydznMLs60hIs9qaY"
+
 app = Flask(__name__)
 CORS(app)
 
-def dict_factory(cursor, row):
-    d = {}
-    for idx, col in enumerate(cursor.description):
-        d[col[0]] = row[idx]
-    return d
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+}
+
+def clean_value(v):
+    if v is None:
+        return None
+    if isinstance(v, str) and len(v) > 10000:
+        v = v[:10000]
+    return v if v != 'null' else None
 
 @app.route('/stats')
 def stats():
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/products?select=id", headers=HEADERS, timeout=10)
+    total = len(r.json()) if r.status_code == 200 else 0
     
-    cur.execute('SELECT COUNT(*) FROM products')
-    total = cur.fetchone()[0]
-    
-    fields = ['nome','azienda','categoria','confezione','utilizzi','modo_duso',
-              'ingredienti','dosaggio','avvertenze','minsan','prezzo',
-              'forma_farmaceutica','fonte']
+    fields = ['nome','azienda','forma_farmaceutica','categoria','confezione',
+              'utilizzazioni','modo_duso','ingredienti','dosaggio','avvertenze',
+              'minsan','prezzo','fonte']
     
     completezza = {}
     for f in fields:
-        cur.execute(f"SELECT COUNT(*) FROM products WHERE {f} IS NOT NULL AND {f} != ''")
-        cnt = cur.fetchone()[0]
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/products?{f}=not.is.null&select={f}",
+            headers=HEADERS, timeout=10
+        )
+        cnt = len(r.json()) if r.status_code == 200 else 0
         completezza[f] = {'count': cnt, 'pct': round(100*cnt/total, 1) if total > 0 else 0}
     
-    conn.close()
     return jsonify({'total': total, 'completezza': completezza})
 
 @app.route('/search')
@@ -45,66 +53,76 @@ def search():
     limit = min(int(request.args.get('limit', 20)), 100)
     offset = int(request.args.get('offset', 0))
     
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    cols = "id,nome,azienda,categoria,modo_duso,ingredienti,dosaggio,avvertenze,minsan,fonte,prezzo,forma_farmaceutica"
     
     if q:
-        cur.execute(f"""
-            SELECT id, nome, azienda, categoria, modo_duso, ingredienti, 
-                   dosaggio, avvertenze, minsan, fonte, prezzo, forma_farmaceutica
-            FROM products 
-            WHERE nome LIKE ? OR azienda LIKE ? OR ingredienti LIKE ?
-            LIMIT ? OFFSET ?
-        """, (f'%{q}%', f'%{q}%', f'%{q}%', limit, offset))
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/products?select={cols}"
+            f"&or=(nome.ilike.%25{q}%25,azienda.ilike.%25{q}%25,ingredienti.ilike.%25{q}%25)"
+            f"&limit={limit}&offset={offset}",
+            headers=HEADERS, timeout=10
+        )
     else:
-        cur.execute(f"SELECT id, nome, azienda, categoria FROM products LIMIT ? OFFSET ?", (limit, offset))
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/products?select={cols}&limit={limit}&offset={offset}",
+            headers=HEADERS, timeout=10
+        )
     
-    cols = [d[0] for d in cur.description]
-    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    conn.close()
-    return jsonify(rows)
+    if r.status_code != 200:
+        return jsonify({'error': r.text}), r.status_code
+    
+    rows = r.json()
+    return jsonify([{k: clean_value(v) for k, v in row.items()} for row in rows])
 
-@app.route('/product/<int:product_id>')
+@app.route('/product/<product_id>')
 def product(product_id):
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('SELECT * FROM products WHERE id = ?', (product_id,))
-    cols = [d[0] for d in cur.description]
-    row = cur.fetchone()
-    conn.close()
-    return jsonify(dict(zip(cols, row)) if row else {})
+    r = requests.get(
+        f"{SUPABASE_URL}/rest/v1/products?id=eq.{product_id}",
+        headers=HEADERS, timeout=10
+    )
+    if r.status_code != 200 or not r.json():
+        return jsonify({})
+    row = r.json()[0]
+    return jsonify({k: clean_value(v) for k, v in row.items()})
 
 @app.route('/categories')
 def categories():
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT categoria, COUNT(*) as cnt 
-        FROM products WHERE categoria != '' AND categoria IS NOT NULL
-        GROUP BY categoria ORDER BY cnt DESC LIMIT 50
-    """)
-    rows = [{'categoria': r[0], 'count': r[1]} for r in cur.fetchall()]
-    conn.close()
-    return jsonify(rows)
+    r = requests.get(
+        f"{SUPABASE_URL}/rest/v1/rpc/get_categories",
+        headers=HEADERS, timeout=10
+    )
+    if r.status_code != 200:
+        # Fallback: manual aggregation
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/products?categoria=not.is.null&select=categoria",
+            headers={**HEADERS, "Accept": "application/json"}, timeout=10
+        )
+        cats = {}
+        for row in r.json():
+            c = row.get('categoria')
+            if c:
+                cats[c] = cats.get(c, 0) + 1
+        return jsonify([{'categoria': k, 'count': v} for k, v in sorted(cats.items(), key=lambda x: -x[1])[:50]])
+    return jsonify(r.json())
 
 @app.route('/aziende')
 def aziende():
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT azienda, COUNT(*) as cnt 
-        FROM products WHERE azienda IS NOT NULL AND azienda != ''
-        GROUP BY azienda ORDER BY cnt DESC LIMIT 50
-    """)
-    rows = [{'azienda': r[0], 'count': r[1]} for r in cur.fetchall()]
-    conn.close()
-    return jsonify(rows)
+    r = requests.get(
+        f"{SUPABASE_URL}/rest/v1/products?azienda=not.is.null&select=azienda",
+        headers={**HEADERS, "Accept": "application/json"}, timeout=10
+    )
+    az = {}
+    for row in r.json():
+        a = row.get('azienda')
+        if a:
+            az[a] = az.get(a, 0) + 1
+    return jsonify([{'azienda': k, 'count': v} for k, v in sorted(az.items(), key=lambda x: -x[1])[:50]])
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok', 'db': DB_PATH})
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/products?select=id&limit=1", headers=HEADERS, timeout=5)
+    return jsonify({'status': 'ok' if r.status_code == 200 else 'error', 'supabase': 'vmammjkauepeeiylnueh'})
 
 if __name__ == '__main__':
-    print(f"Starting IntegrAction API on port 8765...")
-    print(f"DB: {DB_PATH}")
-    app.run(host='0.0.0.0', port=8765, debug=False)
+    print(f"Starting IntegrAction API on port 8765 (Supabase backend)")
+    app.run(host='0.0.0.0', port=8765, debug=False, threaded=True)
